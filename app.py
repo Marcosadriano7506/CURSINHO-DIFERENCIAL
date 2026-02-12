@@ -90,4 +90,28 @@ def login():
         <form method="POST">
             Login: <input name="login"><br><br>
             Senha: <input type="password" name="senha"><br><br>
-            <
+            <button type="submit">Entrar</button>
+        </form>
+    """)
+
+@app.route("/admin")
+def admin():
+    if session.get("tipo") != "admin":
+        return redirect("/login")
+
+    return """
+    <h2>Painel Admin</h2>
+    <p>Sistema iniciado com sucesso 🚀</p>
+    """
+
+@app.route("/aluno")
+def aluno():
+    if session.get("tipo") != "aluno":
+        return redirect("/login")
+
+    return "<h2>Painel do Aluno</h2>"
+
+if __name__ == "__main__":
+    criar_tabelas()
+    criar_admin()
+    app.run(debug=True)
