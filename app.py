@@ -1,26 +1,28 @@
 import os
 import psycopg2
-from flask import Flask, render_template_string, request, redirect, session
+from flask import Flask, render_template_string, request, redirect, session, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta, date
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 app.secret_key = "chave_super_secreta_123"
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+UPLOAD_FOLDER = "materiais_privados"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
 
 # =========================
 # CONEXÃO
 # =========================
 def get_db():
-    if not DATABASE_URL:
-        raise Exception("DATABASE_URL não configurada.")
     return psycopg2.connect(DATABASE_URL)
 
 
 # =========================
-# CRIAÇÃO DE TABELAS
+# CRIAR TABELAS
 # =========================
 def criar_tabelas():
     conn = get_db()
@@ -36,13 +38,12 @@ def criar_tabelas():
     cur.execute("""
     CREATE TABLE IF NOT EXISTS usuarios (
         id SERIAL PRIMARY KEY,
-        nome TEXT NOT NULL,
-        login TEXT UNIQUE NOT NULL,
-        senha TEXT NOT NULL,
-        tipo TEXT NOT NULL,
+        nome TEXT,
+        login TEXT UNIQUE,
+        senha TEXT,
+        tipo TEXT,
         turma_id INTEGER REFERENCES turmas(id),
-        data_matricula DATE,
-        ativo BOOLEAN DEFAULT TRUE
+        data_matricula DATE
     );
     """)
 
@@ -50,11 +51,55 @@ def criar_tabelas():
     CREATE TABLE IF NOT EXISTS pagamentos (
         id SERIAL PRIMARY KEY,
         usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
-        mes INTEGER NOT NULL,
-        ano INTEGER NOT NULL,
-        vencimento DATE NOT NULL,
+        mes INTEGER,
+        ano INTEGER,
+        vencimento DATE,
         status TEXT DEFAULT 'pendente',
         data_pagamento DATE
+    );
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS materiais (
+        id SERIAL PRIMARY KEY,
+        titulo TEXT,
+        nome_arquivo TEXT,
+        turma_id INTEGER REFERENCES turmas(id)
+    );
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS simulados (
+        id SERIAL PRIMARY KEY,
+        titulo TEXT,
+        turma_id INTEGER REFERENCES turmas(id),
+        ativo BOOLEAN DEFAULT TRUE
+    );
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS questoes (
+        id SERIAL PRIMARY KEY,
+        simulado_id INTEGER REFERENCES simulados(id) ON DELETE CASCADE,
+        enunciado TEXT,
+        alt_a TEXT,
+        alt_b TEXT,
+        alt_c TEXT,
+        alt_d TEXT,
+        alt_e TEXT,
+        correta TEXT
+    );
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS resultados (
+        id SERIAL PRIMARY KEY,
+        aluno_id INTEGER REFERENCES usuarios(id),
+        simulado_id INTEGER REFERENCES simulados(id),
+        acertos INTEGER,
+        total INTEGER,
+        percentual FLOAT,
+        data_realizacao DATE
     );
     """)
 
@@ -66,66 +111,23 @@ def criar_tabelas():
 def criar_admin():
     conn = get_db()
     cur = conn.cursor()
-
-    cur.execute("SELECT id FROM usuarios WHERE login = %s", ("admin",))
+    cur.execute("SELECT id FROM usuarios WHERE login='admin'")
     if not cur.fetchone():
-        senha_hash = generate_password_hash("123456")
         cur.execute("""
             INSERT INTO usuarios (nome, login, senha, tipo)
-            VALUES (%s, %s, %s, %s)
-        """, ("Administrador", "admin", senha_hash, "admin"))
+            VALUES (%s,%s,%s,%s)
+        """, ("Administrador", "admin",
+              generate_password_hash("123456"), "admin"))
         conn.commit()
-
     cur.close()
     conn.close()
 
 
-# =========================
-# INICIALIZAR BANCO
-# =========================
 @app.route("/init")
 def init():
     criar_tabelas()
     criar_admin()
-    return "Banco inicializado com sucesso!"
-
-
-# =========================
-# FUNÇÃO DE VERIFICAÇÃO DE BLOQUEIO
-# =========================
-def verificar_status_aluno(usuario_id):
-    conn = get_db()
-    cur = conn.cursor()
-
-    cur.execute("""
-        SELECT vencimento, status
-        FROM pagamentos
-        WHERE usuario_id=%s
-        AND status='pendente'
-        ORDER BY vencimento ASC
-        LIMIT 1
-    """, (usuario_id,))
-
-    registro = cur.fetchone()
-    cur.close()
-    conn.close()
-
-    if not registro:
-        return "ativo", None
-
-    vencimento = registro[0]
-    hoje = date.today()
-
-    if hoje < vencimento:
-        return "ativo", vencimento
-
-    if hoje == vencimento:
-        return "vence_hoje", vencimento
-
-    if hoje <= vencimento + timedelta(days=7):
-        return "atrasado", vencimento
-
-    return "bloqueado", vencimento
+    return "Banco inicializado!"
 
 
 # =========================
@@ -152,22 +154,24 @@ def login():
         if user and check_password_hash(user[1], senha):
             session["user_id"] = user[0]
             session["tipo"] = user[2]
-
-            if user[2] == "admin":
-                return redirect("/admin")
-            else:
-                return redirect("/aluno")
+            return redirect("/admin" if user[2] == "admin" else "/aluno")
 
         return "Login inválido"
 
-    return render_template_string("""
-        <h2>Cursinho Diferencial</h2>
-        <form method="POST">
-            Login: <input name="login"><br><br>
-            Senha: <input type="password" name="senha"><br><br>
-            <button type="submit">Entrar</button>
-        </form>
-    """)
+    return """
+    <h2>Cursinho Diferencial</h2>
+    <form method="POST">
+        Login: <input name="login"><br><br>
+        Senha: <input type="password" name="senha"><br><br>
+        <button>Entrar</button>
+    </form>
+    """
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/login")
 
 
 # =========================
@@ -180,79 +184,18 @@ def admin():
 
     return """
     <h2>Painel Admin</h2>
-    <a href="/turmas">Turmas</a><br><br>
-    <a href="/matricular">Matricular Aluno</a><br><br>
+    <a href="/turmas">Turmas</a><br>
+    <a href="/materiais-admin">Materiais</a><br>
+    <a href="/simulados-admin">Simulados</a><br>
     <a href="/logout">Sair</a>
     """
 
 
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect("/login")
-
-
 # =========================
-# TURMAS
+# MATERIAIS
 # =========================
-@app.route("/turmas")
-def turmas():
-    if session.get("tipo") != "admin":
-        return redirect("/login")
-
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT id, nome FROM turmas")
-    lista = cur.fetchall()
-    cur.close()
-    conn.close()
-
-    html = "<h2>Turmas</h2><a href='/admin'>Voltar</a><br><br>"
-    html += "<a href='/nova-turma'>Nova Turma</a><br><br>"
-
-    for turma in lista:
-        html += f"{turma[1]} - <a href='/excluir-turma/{turma[0]}'>Excluir</a><br>"
-
-    return html
-
-
-@app.route("/nova-turma", methods=["GET", "POST"])
-def nova_turma():
-    if request.method == "POST":
-        nome = request.form["nome"]
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute("INSERT INTO turmas (nome) VALUES (%s)", (nome,))
-        conn.commit()
-        cur.close()
-        conn.close()
-        return redirect("/turmas")
-
-    return """
-    <h2>Nova Turma</h2>
-    <form method="POST">
-        Nome: <input name="nome"><br><br>
-        <button type="submit">Salvar</button>
-    </form>
-    """
-
-
-@app.route("/excluir-turma/<int:id>")
-def excluir_turma(id):
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM turmas WHERE id=%s", (id,))
-    conn.commit()
-    cur.close()
-    conn.close()
-    return redirect("/turmas")
-
-
-# =========================
-# MATRICULAR
-# =========================
-@app.route("/matricular", methods=["GET", "POST"])
-def matricular():
+@app.route("/materiais-admin", methods=["GET", "POST"])
+def materiais_admin():
     if session.get("tipo") != "admin":
         return redirect("/login")
 
@@ -262,132 +205,90 @@ def matricular():
     turmas = cur.fetchall()
 
     if request.method == "POST":
-        nome = request.form["nome"]
-        login = request.form["login"]
-        senha = generate_password_hash(request.form["senha"])
+        titulo = request.form["titulo"]
         turma_id = request.form["turma"]
-        data_matricula = request.form["data_matricula"]
+        arquivo = request.files["arquivo"]
+
+        nome_arquivo = secure_filename(arquivo.filename)
+        caminho = os.path.join(UPLOAD_FOLDER, nome_arquivo)
+        arquivo.save(caminho)
 
         cur.execute("""
-            INSERT INTO usuarios (nome, login, senha, tipo, turma_id, data_matricula)
-            VALUES (%s,%s,%s,%s,%s,%s)
-            RETURNING id
-        """, (nome, login, senha, "aluno", turma_id, data_matricula))
-
-        usuario_id = cur.fetchone()[0]
-
-        base = datetime.strptime(data_matricula, "%Y-%m-%d")
-
-        for i in range(12):
-            venc = base + timedelta(days=30*i)
-            cur.execute("""
-                INSERT INTO pagamentos (usuario_id, mes, ano, vencimento)
-                VALUES (%s,%s,%s,%s)
-            """, (usuario_id, venc.month, venc.year, venc.date()))
+            INSERT INTO materiais (titulo, nome_arquivo, turma_id)
+            VALUES (%s,%s,%s)
+        """, (titulo, nome_arquivo, turma_id))
 
         conn.commit()
-        cur.close()
-        conn.close()
-        return redirect("/admin")
 
-    html = "<h2>Matricular</h2><a href='/admin'>Voltar</a><br><br>"
-    html += "<form method='POST'>"
-    html += "Nome: <input name='nome'><br><br>"
-    html += "Login: <input name='login'><br><br>"
-    html += "Senha: <input name='senha'><br><br>"
-    html += "Data: <input type='date' name='data_matricula'><br><br>"
+    cur.execute("SELECT titulo FROM materiais")
+    lista = cur.fetchall()
+
+    html = "<h2>Materiais</h2><form method='POST' enctype='multipart/form-data'>"
+    html += "Título: <input name='titulo'><br>"
     html += "Turma: <select name='turma'>"
     for t in turmas:
         html += f"<option value='{t[0]}'>{t[1]}</option>"
-    html += "</select><br><br>"
-    html += "<button type='submit'>Salvar</button></form>"
+    html += "</select><br>"
+    html += "Arquivo: <input type='file' name='arquivo'><br><br>"
+    html += "<button>Enviar</button></form><hr>"
 
+    for m in lista:
+        html += m[0] + "<br>"
+
+    cur.close()
+    conn.close()
+    return html
+
+
+@app.route("/material/<nome>")
+def abrir_material(nome):
+    if session.get("tipo") != "aluno":
+        return redirect("/login")
+    return send_file(os.path.join(UPLOAD_FOLDER, nome))
+
+
+# =========================
+# SIMULADOS ADMIN
+# =========================
+@app.route("/simulados-admin", methods=["GET", "POST"])
+def simulados_admin():
+    if session.get("tipo") != "admin":
+        return redirect("/login")
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    if request.method == "POST":
+        titulo = request.form["titulo"]
+        turma = request.form["turma"]
+        cur.execute("INSERT INTO simulados (titulo, turma_id) VALUES (%s,%s)",
+                    (titulo, turma))
+        conn.commit()
+
+    cur.execute("SELECT id, nome FROM turmas")
+    turmas = cur.fetchall()
+
+    html = "<h2>Simulados</h2>"
+    html += "<form method='POST'>Título: <input name='titulo'>"
+    html += "Turma: <select name='turma'>"
+    for t in turmas:
+        html += f"<option value='{t[0]}'>{t[1]}</option>"
+    html += "</select><button>Criar</button></form>"
+
+    cur.close()
+    conn.close()
     return html
 
 
 # =========================
-# VER PAGAMENTOS (ADMIN)
-# =========================
-@app.route("/pagamentos/<int:usuario_id>")
-def ver_pagamentos(usuario_id):
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT id, mes, ano, vencimento, status
-        FROM pagamentos
-        WHERE usuario_id=%s
-        ORDER BY vencimento
-    """, (usuario_id,))
-    lista = cur.fetchall()
-    cur.close()
-    conn.close()
-
-    html = "<h2>Pagamentos</h2><a href='/admin'>Voltar</a><br><br>"
-
-    for p in lista:
-        html += f"{p[1]}/{p[2]} - {p[3]} - {p[4]}"
-        if p[4] == "pendente":
-            html += f" - <a href='/marcar-pago/{p[0]}'>Marcar como pago</a>"
-        html += "<br>"
-
-    return html
-
-
-@app.route("/marcar-pago/<int:id>")
-def marcar_pago(id):
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("""
-        UPDATE pagamentos
-        SET status='pago', data_pagamento=%s
-        WHERE id=%s
-    """, (date.today(), id))
-    conn.commit()
-    cur.close()
-    conn.close()
-    return redirect(request.referrer)
-
-
-# =========================
-# PAINEL ALUNO
+# ALUNO
 # =========================
 @app.route("/aluno")
 def aluno():
     if session.get("tipo") != "aluno":
         return redirect("/login")
 
-    usuario_id = session["user_id"]
-    status, vencimento = verificar_status_aluno(usuario_id)
-
-    if status == "bloqueado":
-        return "<h2>Seu acesso foi bloqueado por inadimplência.</h2>"
-
-    aviso = ""
-    if status == "vence_hoje":
-        aviso = "<p>⚠️ Sua mensalidade vence hoje.</p>"
-    elif status == "atrasado":
-        dias = (date.today() - vencimento).days
-        aviso = f"<p>❗ Mensalidade vencida há {dias} dias.</p>"
-
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT mes, ano, vencimento, status
-        FROM pagamentos
-        WHERE usuario_id=%s
-        ORDER BY vencimento
-    """, (usuario_id,))
-    lista = cur.fetchall()
-    cur.close()
-    conn.close()
-
-    html = "<h2>Painel do Aluno</h2>"
-    html += aviso
-    html += "<h3>Histórico</h3>"
-
-    for p in lista:
-        html += f"{p[0]}/{p[1]} - {p[2]} - {p[3]}<br>"
-
-    html += "<br><a href='/logout'>Sair</a>"
-
-    return html
+    return """
+    <h2>Painel do Aluno</h2>
+    <a href="/logout">Sair</a>
+    """
