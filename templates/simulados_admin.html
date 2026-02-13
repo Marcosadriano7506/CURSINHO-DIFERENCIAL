@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="card">
+    <h3>📝 Criar Simulado</h3>
+
+    <form method="POST">
+        <label>Título:</label><br>
+        <input name="titulo"><br><br>
+
+        <label>Turma:</label><br>
+        <select name="turma">
+            {% for turma in turmas %}
+                <option value="{{ turma[0] }}">{{ turma[1] }}</option>
+            {% endfor %}
+        </select><br><br>
+
+        <button>Criar Simulado</button>
+    </form>
+</div>
+
+{% endblock %}
