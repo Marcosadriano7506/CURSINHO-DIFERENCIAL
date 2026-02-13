@@ -1,8 +1,8 @@
 import os
 import psycopg2
-from flask import Flask, render_template_string, request, redirect, session, send_file
+from flask import Flask, render_template, request, redirect, session, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, timedelta, date
+from datetime import datetime
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
@@ -48,18 +48,6 @@ def criar_tabelas():
     """)
 
     cur.execute("""
-    CREATE TABLE IF NOT EXISTS pagamentos (
-        id SERIAL PRIMARY KEY,
-        usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
-        mes INTEGER,
-        ano INTEGER,
-        vencimento DATE,
-        status TEXT DEFAULT 'pendente',
-        data_pagamento DATE
-    );
-    """)
-
-    cur.execute("""
     CREATE TABLE IF NOT EXISTS materiais (
         id SERIAL PRIMARY KEY,
         titulo TEXT,
@@ -74,32 +62,6 @@ def criar_tabelas():
         titulo TEXT,
         turma_id INTEGER REFERENCES turmas(id),
         ativo BOOLEAN DEFAULT TRUE
-    );
-    """)
-
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS questoes (
-        id SERIAL PRIMARY KEY,
-        simulado_id INTEGER REFERENCES simulados(id) ON DELETE CASCADE,
-        enunciado TEXT,
-        alt_a TEXT,
-        alt_b TEXT,
-        alt_c TEXT,
-        alt_d TEXT,
-        alt_e TEXT,
-        correta TEXT
-    );
-    """)
-
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS resultados (
-        id SERIAL PRIMARY KEY,
-        aluno_id INTEGER REFERENCES usuarios(id),
-        simulado_id INTEGER REFERENCES simulados(id),
-        acertos INTEGER,
-        total INTEGER,
-        percentual FLOAT,
-        data_realizacao DATE
     );
     """)
 
@@ -158,14 +120,7 @@ def login():
 
         return "Login inválido"
 
-    return """
-    <h2>Cursinho Diferencial</h2>
-    <form method="POST">
-        Login: <input name="login"><br><br>
-        Senha: <input type="password" name="senha"><br><br>
-        <button>Entrar</button>
-    </form>
-    """
+    return render_template("login.html")
 
 
 @app.route("/logout")
@@ -175,24 +130,18 @@ def logout():
 
 
 # =========================
-# ADMIN
+# ADMIN DASHBOARD
 # =========================
 @app.route("/admin")
 def admin():
     if session.get("tipo") != "admin":
         return redirect("/login")
 
-    return """
-    <h2>Painel Admin</h2>
-    <a href="/turmas">Turmas</a><br>
-    <a href="/materiais-admin">Materiais</a><br>
-    <a href="/simulados-admin">Simulados</a><br>
-    <a href="/logout">Sair</a>
-    """
+    return render_template("admin_dashboard.html")
 
 
 # =========================
-# MATERIAIS
+# MATERIAIS ADMIN
 # =========================
 @app.route("/materiais-admin", methods=["GET", "POST"])
 def materiais_admin():
@@ -217,27 +166,17 @@ def materiais_admin():
             INSERT INTO materiais (titulo, nome_arquivo, turma_id)
             VALUES (%s,%s,%s)
         """, (titulo, nome_arquivo, turma_id))
-
         conn.commit()
 
     cur.execute("SELECT titulo FROM materiais")
     lista = cur.fetchall()
 
-    html = "<h2>Materiais</h2><form method='POST' enctype='multipart/form-data'>"
-    html += "Título: <input name='titulo'><br>"
-    html += "Turma: <select name='turma'>"
-    for t in turmas:
-        html += f"<option value='{t[0]}'>{t[1]}</option>"
-    html += "</select><br>"
-    html += "Arquivo: <input type='file' name='arquivo'><br><br>"
-    html += "<button>Enviar</button></form><hr>"
-
-    for m in lista:
-        html += m[0] + "<br>"
-
     cur.close()
     conn.close()
-    return html
+
+    return render_template("materiais_admin.html",
+                           turmas=turmas,
+                           lista=lista)
 
 
 @app.route("/material/<nome>")
@@ -268,27 +207,18 @@ def simulados_admin():
     cur.execute("SELECT id, nome FROM turmas")
     turmas = cur.fetchall()
 
-    html = "<h2>Simulados</h2>"
-    html += "<form method='POST'>Título: <input name='titulo'>"
-    html += "Turma: <select name='turma'>"
-    for t in turmas:
-        html += f"<option value='{t[0]}'>{t[1]}</option>"
-    html += "</select><button>Criar</button></form>"
-
     cur.close()
     conn.close()
-    return html
+
+    return render_template("simulados_admin.html", turmas=turmas)
 
 
 # =========================
-# ALUNO
+# ALUNO DASHBOARD
 # =========================
 @app.route("/aluno")
 def aluno():
     if session.get("tipo") != "aluno":
         return redirect("/login")
 
-    return """
-    <h2>Painel do Aluno</h2>
-    <a href="/logout">Sair</a>
-    """
+    return render_template("aluno_dashboard.html")
