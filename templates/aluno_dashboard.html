@@ -15,6 +15,42 @@
         <li>📝 Simulados disponíveis</li>
         <li>📊 Seus resultados</li>
     </ul>
+    <h4>📝 Simulados disponíveis</h4>
+    {% if simulados %}
+        {% for simulado in simulados %}
+            <p>
+                {{ simulado[1] }}
+                <a href="/fazer-simulado/{{ simulado[0] }}"><button>Responder</button></a>
+            </p>
+        {% endfor %}
+    {% else %}
+        <p>Nenhum simulado disponível no momento.</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h4>📂 Materiais da turma</h4>
+    {% if materiais %}
+        {% for material in materiais %}
+            <p>
+                📄 {{ material[0] }}
+                <a href="/uploads/{{ material[1] }}">Baixar</a>
+            </p>
+        {% endfor %}
+    {% else %}
+        <p>Nenhum material disponível.</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h4>📊 Histórico de resultados</h4>
+    {% if historico %}
+        {% for item in historico %}
+            <p>{{ item[0] }}% - {{ item[1] }}</p>
+        {% endfor %}
+    {% else %}
+        <p>Você ainda não realizou simulados.</p>
+    {% endif %}
 </div>
 
 {% endblock %}
