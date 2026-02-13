@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="card">
+    <h3>📂 Gerenciar Materiais</h3>
+
+    <form method="POST" enctype="multipart/form-data">
+        <label>Título:</label><br>
+        <input name="titulo"><br><br>
+
+        <label>Turma:</label><br>
+        <select name="turma">
+            {% for turma in turmas %}
+                <option value="{{ turma[0] }}">{{ turma[1] }}</option>
+            {% endfor %}
+        </select><br><br>
+
+        <label>Arquivo:</label><br>
+        <input type="file" name="arquivo"><br><br>
+
+        <button>Enviar Material</button>
+    </form>
+</div>
+
+<div class="card">
+    <h4>Materiais Enviados</h4>
+    {% for item in lista %}
+        <p>📄 {{ item[0] }}</p>
+    {% endfor %}
+</div>
+
+{% endblock %}
