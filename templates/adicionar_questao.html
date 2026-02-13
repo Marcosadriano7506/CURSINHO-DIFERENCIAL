@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="card">
+    <h3>Adicionar Questão</h3>
+
+    <form method="POST">
+        Enunciado:<br>
+        <textarea name="enunciado" required></textarea><br><br>
+
+        A: <input name="a" required><br>
+        B: <input name="b" required><br>
+        C: <input name="c" required><br>
+        D: <input name="d" required><br>
+        E: <input name="e" required><br><br>
+
+        Correta:
+        <select name="correta">
+            <option value="A">A</option>
+            <option value="B">B</option>
+            <option value="C">C</option>
+            <option value="D">D</option>
+            <option value="E">E</option>
+        </select><br><br>
+
+        <button>Salvar Questão</button>
+    </form>
+</div>
+
+{% endblock %}
