@@ -133,17 +133,112 @@ def login():
     """)
 
 
+# =========================
+# PAINEL ADMIN
+# =========================
 @app.route("/admin")
 def admin():
     if session.get("tipo") != "admin":
         return redirect("/login")
 
     return """
-    <h2>Painel Admin</h2>
-    <p>Sistema iniciado com sucesso 🚀</p>
+    <h2>Painel Admin - Cursinho Diferencial</h2>
+    <br>
+    <a href="/turmas">🎓 Gerenciar Turmas</a><br><br>
+    <a href="/logout">🚪 Sair</a>
     """
 
 
+# =========================
+# LOGOUT
+# =========================
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/login")
+
+
+# =========================
+# LISTAR TURMAS
+# =========================
+@app.route("/turmas")
+def turmas():
+    if session.get("tipo") != "admin":
+        return redirect("/login")
+
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT id, nome FROM turmas ORDER BY id DESC")
+    lista = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    html = """
+    <h2>Gerenciar Turmas</h2>
+    <a href="/admin">⬅ Voltar</a><br><br>
+    <a href="/nova-turma">➕ Criar Nova Turma</a><br><br>
+    <ul>
+    """
+
+    for turma in lista:
+        html += f"<li>{turma[1]} - <a href='/excluir-turma/{turma[0]}'>Excluir</a></li>"
+
+    html += "</ul>"
+
+    return html
+
+
+# =========================
+# CRIAR NOVA TURMA
+# =========================
+@app.route("/nova-turma", methods=["GET", "POST"])
+def nova_turma():
+    if session.get("tipo") != "admin":
+        return redirect("/login")
+
+    if request.method == "POST":
+        nome = request.form["nome"]
+
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("INSERT INTO turmas (nome) VALUES (%s)", (nome,))
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return redirect("/turmas")
+
+    return """
+    <h2>Criar Nova Turma</h2>
+    <a href="/turmas">⬅ Voltar</a><br><br>
+    <form method="POST">
+        Nome da turma: <input name="nome" required><br><br>
+        <button type="submit">Salvar</button>
+    </form>
+    """
+
+
+# =========================
+# EXCLUIR TURMA
+# =========================
+@app.route("/excluir-turma/<int:id>")
+def excluir_turma(id):
+    if session.get("tipo") != "admin":
+        return redirect("/login")
+
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM turmas WHERE id=%s", (id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return redirect("/turmas")
+
+
+# =========================
+# PAINEL ALUNO
+# =========================
 @app.route("/aluno")
 def aluno():
     if session.get("tipo") != "aluno":
