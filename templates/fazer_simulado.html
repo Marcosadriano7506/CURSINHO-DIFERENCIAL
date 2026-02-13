@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="card">
+    <h3>Responder Simulado</h3>
+
+    <form method="POST">
+        {% for q in questoes %}
+            <p><strong>{{ q[1] }}</strong></p>
+
+            <input type="radio" name="q{{ q[0] }}" value="A"> {{ q[2] }}<br>
+            <input type="radio" name="q{{ q[0] }}" value="B"> {{ q[3] }}<br>
+            <input type="radio" name="q{{ q[0] }}" value="C"> {{ q[4] }}<br>
+            <input type="radio" name="q{{ q[0] }}" value="D"> {{ q[5] }}<br>
+            <input type="radio" name="q{{ q[0] }}" value="E"> {{ q[6] }}<br><br>
+        {% endfor %}
+
+        <button>Finalizar</button>
+    </form>
+</div>
+
+{% endblock %}
