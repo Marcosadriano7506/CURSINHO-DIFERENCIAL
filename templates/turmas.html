@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="card">
+    <h3>🎓 Turmas</h3>
+
+    {% if turmas %}
+        {% for turma in turmas %}
+            <p>{{ turma[1] }}</p>
+        {% endfor %}
+    {% else %}
+        <p>Nenhuma turma cadastrada.</p>
+    {% endif %}
+</div>
+
+{% endblock %}
