@@ -2,6 +2,7 @@ import os
 import psycopg2
 from flask import Flask, render_template_string, request, redirect, session
 from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 app.secret_key = "chave_super_secreta_123"
@@ -42,6 +43,18 @@ def criar_tabelas():
         turma_id INTEGER REFERENCES turmas(id),
         data_matricula DATE,
         ativo BOOLEAN DEFAULT TRUE
+    );
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS pagamentos (
+        id SERIAL PRIMARY KEY,
+        usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
+        mes INTEGER NOT NULL,
+        ano INTEGER NOT NULL,
+        vencimento DATE NOT NULL,
+        status TEXT DEFAULT 'pendente',
+        data_pagamento DATE
     );
     """)
 
@@ -145,6 +158,7 @@ def admin():
     <h2>Painel Admin - Cursinho Diferencial</h2>
     <br>
     <a href="/turmas">🎓 Gerenciar Turmas</a><br><br>
+    <a href="/matricular">👥 Matricular Aluno</a><br><br>
     <a href="/logout">🚪 Sair</a>
     """
 
@@ -234,6 +248,83 @@ def excluir_turma(id):
     conn.close()
 
     return redirect("/turmas")
+
+
+# =========================
+# MATRICULAR ALUNO
+# =========================
+@app.route("/matricular", methods=["GET", "POST"])
+def matricular():
+    if session.get("tipo") != "admin":
+        return redirect("/login")
+
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT id, nome FROM turmas")
+    turmas = cur.fetchall()
+
+    if request.method == "POST":
+        nome = request.form["nome"]
+        login = request.form["login"]
+        senha = request.form["senha"]
+        turma_id = request.form["turma"]
+        data_matricula = request.form["data_matricula"]
+
+        senha_hash = generate_password_hash(senha)
+
+        cur.execute("""
+            INSERT INTO usuarios (nome, login, senha, tipo, turma_id, data_matricula)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (nome, login, senha_hash, "aluno", turma_id, data_matricula))
+
+        usuario_id = cur.fetchone()[0]
+
+        data_base = datetime.strptime(data_matricula, "%Y-%m-%d")
+
+        for i in range(12):
+            vencimento = data_base + timedelta(days=30*i)
+            cur.execute("""
+                INSERT INTO pagamentos (usuario_id, mes, ano, vencimento)
+                VALUES (%s, %s, %s, %s)
+            """, (
+                usuario_id,
+                vencimento.month,
+                vencimento.year,
+                vencimento.date()
+            ))
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return redirect("/admin")
+
+    html = """
+    <h2>Matricular Novo Aluno</h2>
+    <a href="/admin">⬅ Voltar</a><br><br>
+    <form method="POST">
+        Nome: <input name="nome" required><br><br>
+        Login: <input name="login" required><br><br>
+        Senha: <input name="senha" required><br><br>
+        Data da matrícula: <input type="date" name="data_matricula" required><br><br>
+        Turma:
+        <select name="turma" required>
+    """
+
+    for turma in turmas:
+        html += f"<option value='{turma[0]}'>{turma[1]}</option>"
+
+    html += """
+        </select><br><br>
+        <button type="submit">Matricular</button>
+    </form>
+    """
+
+    cur.close()
+    conn.close()
+
+    return html
 
 
 # =========================
