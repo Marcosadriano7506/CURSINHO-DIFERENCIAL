@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="card">
+    <h3>Resultado</h3>
+
+    <p>Acertos: {{ acertos }}/{{ total }}</p>
+    <p>Percentual: {{ percentual }}%</p>
+
+    <a href="/aluno">
+        <button>Voltar</button>
+    </a>
+</div>
+
+{% endblock %}
