@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Cursinho Diferencial</title>
+    <style>
+        body {
+            font-family: Arial;
+            margin: 0;
+            background-color: #f4f6f9;
+        }
+        header {
+            background-color: #1e3a8a;
+            color: white;
+            padding: 15px;
+        }
+        nav {
+            background: #0f172a;
+            padding: 10px;
+        }
+        nav a {
+            color: white;
+            margin-right: 15px;
+            text-decoration: none;
+        }
+        .container {
+            padding: 20px;
+        }
+        .card {
+            background: white;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 6px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #1d4ed8;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h2>Cursinho Diferencial</h2>
+</header>
+
+<nav>
+    {% if session.tipo == "admin" %}
+        <a href="/admin">Dashboard</a>
+        <a href="/turmas">Turmas</a>
+        <a href="/matricular">Alunos</a>
+        <a href="/materiais-admin">Materiais</a>
+        <a href="/simulados-admin">Simulados</a>
+        <a href="/logout">Sair</a>
+    {% elif session.tipo == "aluno" %}
+        <a href="/aluno">Dashboard</a>
+        <a href="/logout">Sair</a>
+    {% endif %}
+</nav>
+
+<div class="container">
+    {% block content %}{% endblock %}
+</div>
+
+</body>
+</html>
