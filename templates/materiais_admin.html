@@ -8,9 +8,11 @@
     <form method="POST" enctype="multipart/form-data">
         <label>Título:</label><br>
         <input name="titulo"><br><br>
+        <input name="titulo" required><br><br>
 
         <label>Turma:</label><br>
         <select name="turma">
+        <select name="turma" required>
             {% for turma in turmas %}
                 <option value="{{ turma[0] }}">{{ turma[1] }}</option>
             {% endfor %}
@@ -18,6 +20,7 @@
 
         <label>Arquivo:</label><br>
         <input type="file" name="arquivo"><br><br>
+        <input type="file" name="arquivo" required><br><br>
 
         <button>Enviar Material</button>
     </form>
@@ -28,6 +31,13 @@
     {% for item in lista %}
         <p>📄 {{ item[0] }}</p>
     {% endfor %}
+    {% if lista %}
+        {% for item in lista %}
+            <p>📄 {{ item[0] }} ({{ item[2] or 'Sem turma' }}) - <a href="/uploads/{{ item[1] }}">Baixar</a></p>
+        {% endfor %}
+    {% else %}
+        <p>Nenhum material enviado.</p>
+    {% endif %}
 </div>
 
 {% endblock %}
