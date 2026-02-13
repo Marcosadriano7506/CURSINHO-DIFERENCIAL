@@ -3,11 +3,16 @@
 {% block content %}
 <div class="card">
     <h3>Login</h3>
+    {% if erro %}
+        <p style="color:red;">{{ erro }}</p>
+    {% endif %}
     <form method="POST">
         Login:<br>
         <input name="login"><br><br>
+        <input name="login" required><br><br>
         Senha:<br>
         <input type="password" name="senha"><br><br>
+        <input type="password" name="senha" required><br><br>
         <button>Entrar</button>
     </form>
 </div>
