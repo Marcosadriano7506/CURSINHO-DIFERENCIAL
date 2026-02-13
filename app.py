@@ -1,21 +1,17 @@
 import os
 import psycopg2
-from flask import Flask, render_template, request, redirect, session, send_file
+from flask import Flask, render_template, request, redirect, session
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
-from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 app.secret_key = "chave_super_secreta_123"
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-UPLOAD_FOLDER = "materiais_privados"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
 
 # =========================
-# CONEXÃO SEGURA
+# CONEXÃO
 # =========================
 def get_db():
     if not DATABASE_URL:
@@ -24,7 +20,7 @@ def get_db():
 
 
 # =========================
-# CRIAÇÃO DE TABELAS COMPLETA
+# CRIAÇÃO DE TABELAS
 # =========================
 def criar_tabelas():
     conn = get_db()
@@ -44,16 +40,6 @@ def criar_tabelas():
         login TEXT UNIQUE,
         senha TEXT,
         tipo TEXT,
-        turma_id INTEGER REFERENCES turmas(id),
-        data_matricula DATE
-    );
-    """)
-
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS materiais (
-        id SERIAL PRIMARY KEY,
-        titulo TEXT,
-        nome_arquivo TEXT,
         turma_id INTEGER REFERENCES turmas(id)
     );
     """)
@@ -101,7 +87,6 @@ def criar_tabelas():
 def criar_admin():
     conn = get_db()
     cur = conn.cursor()
-
     cur.execute("SELECT id FROM usuarios WHERE login='admin'")
     if not cur.fetchone():
         cur.execute("""
@@ -110,7 +95,6 @@ def criar_admin():
         """, ("Administrador", "admin",
               generate_password_hash("123456"), "admin"))
         conn.commit()
-
     cur.close()
     conn.close()
 
@@ -166,22 +150,29 @@ def logout():
 def admin():
     if session.get("tipo") != "admin":
         return redirect("/login")
-
     return render_template("admin_dashboard.html")
 
 
 # =========================
 # TURMAS
 # =========================
-@app.route("/turmas")
+@app.route("/turmas", methods=["GET", "POST"])
 def turmas():
     if session.get("tipo") != "admin":
         return redirect("/login")
 
     conn = get_db()
     cur = conn.cursor()
+
+    if request.method == "POST":
+        nome = request.form.get("nome")
+        if nome:
+            cur.execute("INSERT INTO turmas (nome) VALUES (%s)", (nome,))
+            conn.commit()
+
     cur.execute("SELECT id, nome FROM turmas ORDER BY id DESC")
     lista = cur.fetchall()
+
     cur.close()
     conn.close()
 
@@ -202,9 +193,10 @@ def simulados_admin():
     if request.method == "POST":
         titulo = request.form.get("titulo")
         turma = request.form.get("turma")
-        cur.execute("INSERT INTO simulados (titulo, turma_id) VALUES (%s,%s)",
-                    (titulo, turma))
-        conn.commit()
+        if titulo and turma:
+            cur.execute("INSERT INTO simulados (titulo, turma_id) VALUES (%s,%s)",
+                        (titulo, turma))
+            conn.commit()
 
     cur.execute("SELECT id, nome FROM turmas")
     turmas = cur.fetchall()
@@ -218,6 +210,41 @@ def simulados_admin():
     return render_template("simulados_admin.html",
                            turmas=turmas,
                            lista=lista)
+
+
+# =========================
+# ADICIONAR QUESTÃO
+# =========================
+@app.route("/adicionar-questao/<int:simulado_id>", methods=["GET", "POST"])
+def adicionar_questao(simulado_id):
+    if session.get("tipo") != "admin":
+        return redirect("/login")
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    if request.method == "POST":
+        cur.execute("""
+            INSERT INTO questoes
+            (simulado_id,enunciado,alt_a,alt_b,alt_c,alt_d,alt_e,correta)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (
+            simulado_id,
+            request.form.get("enunciado"),
+            request.form.get("a"),
+            request.form.get("b"),
+            request.form.get("c"),
+            request.form.get("d"),
+            request.form.get("e"),
+            request.form.get("correta")
+        ))
+        conn.commit()
+
+    cur.close()
+    conn.close()
+
+    return render_template("adicionar_questao.html",
+                           simulado_id=simulado_id)
 
 
 # =========================
@@ -236,28 +263,25 @@ def aluno():
     cur.execute("SELECT turma_id FROM usuarios WHERE id=%s", (usuario_id,))
     turma = cur.fetchone()
 
-    if not turma:
-        cur.close()
-        conn.close()
-        return render_template("aluno_dashboard.html",
-                               simulados=[],
-                               historico=[])
+    simulados = []
+    historico = []
 
-    turma_id = turma[0]
+    if turma:
+        turma_id = turma[0]
 
-    cur.execute("""
-        SELECT id, titulo FROM simulados
-        WHERE turma_id=%s AND ativo=TRUE
-    """, (turma_id,))
-    simulados = cur.fetchall()
+        cur.execute("""
+            SELECT id, titulo FROM simulados
+            WHERE turma_id=%s AND ativo=TRUE
+        """, (turma_id,))
+        simulados = cur.fetchall()
 
-    cur.execute("""
-        SELECT percentual, data_realizacao
-        FROM resultados
-        WHERE aluno_id=%s
-        ORDER BY data_realizacao DESC
-    """, (usuario_id,))
-    historico = cur.fetchall()
+        cur.execute("""
+            SELECT percentual, data_realizacao
+            FROM resultados
+            WHERE aluno_id=%s
+            ORDER BY data_realizacao DESC
+        """, (usuario_id,))
+        historico = cur.fetchall()
 
     cur.close()
     conn.close()
@@ -276,6 +300,7 @@ def fazer_simulado(simulado_id):
         return redirect("/login")
 
     usuario_id = session["user_id"]
+
     conn = get_db()
     cur = conn.cursor()
 
@@ -300,8 +325,8 @@ def fazer_simulado(simulado_id):
             VALUES (%s,%s,%s,%s,%s,%s)
         """, (usuario_id, simulado_id, acertos, total,
               percentual, datetime.now().date()))
-
         conn.commit()
+
         cur.close()
         conn.close()
 
